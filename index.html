@@ -282,30 +282,6 @@
             justify-content: flex-end;
             padding-right: 8%
         }
-
-        .cursor-dot {
-            width: 8px;
-            height: 8px;
-            background: var(--accent);
-            border-radius: 50%;
-            position: fixed;
-            pointer-events: none;
-            z-index: 1000;
-            transition: transform 0.1s ease;
-            box-shadow: 0 0 20px var(--accent), 0 0 60px var(--accent);
-        }
-        .cursor-ring {
-            width: 30px;
-            height: 30px;
-            border: 1px solid var(--accent);
-            border-radius: 50%;
-            position: fixed;
-            pointer-events: none;
-            z-index: 999;
-            transition: transform 0.15s ease, border-color 0.3s;
-            opacity: 0.5;
-        }
-
         .section {
             position: absolute;
             right: 8%;
@@ -809,15 +785,16 @@
             ambientSource.loop = true;
             const filter = actx.createBiquadFilter();
             filter.type = 'lowpass';
-            filter.frequency.value = 110;
+            filter.frequency.value = 110;   // более низкий, загадочный гул
             ambientGain = actx.createGain();
-            ambientGain.gain.value = 0.015;
+            ambientGain.gain.value = 0.015; // почти на грани слышимости
             ambientSource.connect(filter);
             filter.connect(ambientGain);
             ambientGain.connect(masterGain);
             ambientSource.start();
         }
 
+        // Звуки стали тише: уменьшены gain
         function playTermOpen() {
             try {
                 initAudio();
@@ -826,7 +803,7 @@
                 o.type = 'sine';
                 o.frequency.setValueAtTime(400, t);
                 o.frequency.exponentialRampToValueAtTime(1200, t + 0.08);
-                g.gain.setValueAtTime(0.1, t);
+                g.gain.setValueAtTime(0.08, t); // было 0.15
                 g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
                 o.connect(g);
                 g.connect(masterGain);
@@ -843,7 +820,7 @@
                 o.type = 'sine';
                 o.frequency.setValueAtTime(880, t);
                 o.frequency.exponentialRampToValueAtTime(440, t + 0.06);
-                g.gain.setValueAtTime(0.06, t);
+                g.gain.setValueAtTime(0.05, t); // было 0.09
                 g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
                 o.connect(g);
                 g.connect(masterGain);
@@ -860,7 +837,7 @@
                 o.type = 'triangle';
                 o.frequency.setValueAtTime(150, t);
                 o.frequency.exponentialRampToValueAtTime(60, t + 0.15);
-                g.gain.setValueAtTime(0.08, t);
+                g.gain.setValueAtTime(0.07, t); // было 0.12
                 g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
                 o.connect(g);
                 g.connect(masterGain);
@@ -877,7 +854,7 @@
                 o.type = 'triangle';
                 o.frequency.setValueAtTime(200, t);
                 o.frequency.exponentialRampToValueAtTime(80, t + 0.12);
-                g.gain.setValueAtTime(0.1, t);
+                g.gain.setValueAtTime(0.06, t); // было 0.1
                 g.gain.exponentialRampToValueAtTime(0.001, t + 0.13);
                 o.connect(g);
                 g.connect(masterGain);
@@ -896,7 +873,9 @@
             }
         }
 
-        // Однократный запуск фонового шума при любом первом действии пользователя
+        document.getElementById('mute-btn').addEventListener('click', toggleMute);
+
+        // Запуск эмбиента при первом взаимодействии (клик или касание)
         function initAmbientOnInteraction() {
             if (ambientStarted) return;
             initAudio();
@@ -906,8 +885,6 @@
         }
         document.addEventListener('click', initAmbientOnInteraction);
         document.addEventListener('touchstart', initAmbientOnInteraction);
-
-        document.getElementById('mute-btn').addEventListener('click', toggleMute);
 
         /* ===== THREE.JS ===== */
         const scene = new THREE.Scene();
@@ -1137,9 +1114,11 @@
         planetAbout.position.set(-2, -2.2, 0);
         planetProjects.position.set(10, 0.8, 0);
         planetContact.position.set(-14, 0.8, 0);
-        scene.add(planetAbout, planetProjects, planetContact);
+        const planetGroup = new THREE.Group();
+        planetGroup.add(planetAbout, planetProjects, planetContact);
+        scene.add(planetGroup);
 
-        // Туманности (сохраняем для смены темы)
+        // Туманности
         let nebulas = [];
 
         function addNebula(color1, color2, pos, scale) {
@@ -1162,7 +1141,7 @@
         addNebula('rgba(0,184,169,0.4)', 'rgba(0,184,169,0)', new THREE.Vector3(7, -3, -18), 13);
         addNebula('rgba(255,107,107,0.4)', 'rgba(255,107,107,0)', new THREE.Vector3(1, -6, -14), 15);
 
-        // Звёзды и туманности
+        // Звёзды
         const starsGroup = new THREE.Group();
         scene.add(starsGroup);
         const starsGeo = new THREE.BufferGeometry();
@@ -1178,7 +1157,7 @@
         dustGeo.setAttribute('position', new THREE.BufferAttribute(dustArr, 3));
         starsGroup.add(new THREE.Points(dustGeo, new THREE.PointsMaterial({ color: 0x8888cc, size: 0.18, blending: THREE.AdditiveBlending, sizeAttenuation: true, opacity: 0.5 })));
 
-        // Астероиды и космическая пыль
+        // Астероиды
         const debrisGroup = new THREE.Group();
         scene.add(debrisGroup);
         const asteroidCount = 80;
@@ -1211,7 +1190,7 @@
         backLight.position.set(-3, 1.5, 8);
         scene.add(backLight);
 
-        // ---------- КАМЕРА (ручное управление и анимации) ----------
+        // ---------- КАМЕРА (орбитальное управление с инерцией) ----------
         let activePlanet = planetAbout;
         const targetCamPos = new THREE.Vector3(-2, 1.8, 10);
         const currentCamPos = targetCamPos.clone();
@@ -1223,7 +1202,7 @@
         camera.lookAt(currentLookAt);
         let flyAnimation = null;
 
-        function animateFly(fromPos, toPos, fromLookAt, toLookAt, duration = 1400) {
+        function animateFly(fromPos, toPos, fromLookAt, toLookAt, duration = 1400, onComplete) {
             if (flyAnimation) cancelAnimationFrame(flyAnimation);
             let startTime = null;
             function step(ts) {
@@ -1240,6 +1219,7 @@
                     currentCamPos.copy(toPos);
                     currentLookAt.copy(toLookAt);
                     flyAnimation = null;
+                    if (onComplete) onComplete();
                 }
             }
             flyAnimation = requestAnimationFrame(step);
@@ -1259,91 +1239,125 @@
             zoomAnimId = requestAnimationFrame(step);
         }
 
-        // Переменные для ручного управления камерой
+        // ------ НОВОЕ СОСТОЯНИЕ ORBIT-УПРАВЛЕНИЯ ------
+        let orbitTheta = 0;
+        let orbitPhi = Math.PI / 3;
+        let orbitRadius = 10;
+        let targetOrbitTheta = 0;
+        let targetOrbitPhi = Math.PI / 3;
+        let targetOrbitRadius = 10;
+
+        let thetaVelocity = 0;
+        let phiVelocity = 0;
+        const damping = 0.92;
+
+        let returnTimeout = null;
+        const RETURN_DELAY = 4000; // мс до автоматического возврата ракурса
+
         let isDragging = false;
-        let dragStartX = 0, dragStartY = 0;
         let dragMoved = false;
-        let preDragTargetPos = new THREE.Vector3();
-        let preDragTargetLookAt = new THREE.Vector3();
-        let spherical = new THREE.Spherical();
-        let sphericalRadius = 0;
-        let theta = 0, phi = 0;
+        let lastMouseX = 0, lastMouseY = 0;
 
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
-        const interactableObjects = [
-            { obj: planetAbout, id: 'about' },
-            { obj: planetProjects, id: 'projects' },
-            { obj: planetContact, id: 'contact' }
-        ];
 
-        function onPointerDown(e) {
-            if (e.target === renderer.domElement) {
-                dragStartX = e.clientX;
-                dragStartY = e.clientY;
-                dragMoved = false;
-                isDragging = true;
-                preDragTargetPos.copy(targetCamPos);
-                preDragTargetLookAt.copy(targetLookAt);
-                spherical.setFromVector3(currentCamPos.clone().sub(targetLookAt));
-                sphericalRadius = spherical.radius;
-                theta = spherical.theta;
-                phi = spherical.phi;
-                e.preventDefault();
-            }
+        function applyOrbitToTarget() {
+            const lookAt = targetLookAt;
+            const sp = new THREE.Spherical(targetOrbitRadius, targetOrbitPhi, targetOrbitTheta);
+            const pos = new THREE.Vector3().setFromSpherical(sp).add(lookAt);
+            targetCamPos.copy(pos);
         }
 
-        function onPointerMove(e) {
-            if (!isDragging) return;
-            const dx = e.clientX - dragStartX;
-            const dy = e.clientY - dragStartY;
-            if (Math.abs(dx) > 2 || Math.abs(dy) > 2) dragMoved = true;
-            if (dragMoved) {
-                theta -= dx * 0.0008;
-                phi += dy * 0.0008;
-                phi = Math.max(0.2, Math.min(Math.PI - 0.2, phi));
-                spherical.theta = theta;
-                spherical.phi = phi;
-                spherical.radius = sphericalRadius;
-                const newPos = new THREE.Vector3().setFromSpherical(spherical).add(targetLookAt);
-                currentCamPos.copy(newPos);
-                camera.position.copy(currentCamPos);
-                camera.lookAt(targetLookAt);
-            }
+        function resetOrbitToDefault() {
+            orbitTheta = 0;
+            orbitPhi = Math.PI / 3;
+            orbitRadius = 10;
+            targetOrbitTheta = 0;
+            targetOrbitPhi = Math.PI / 3;
+            targetOrbitRadius = 10;
+            thetaVelocity = 0;
+            phiVelocity = 0;
+            applyOrbitToTarget();
         }
 
-        function onPointerUp(e) {
+        function scheduleReturn() {
+            if (returnTimeout) clearTimeout(returnTimeout);
+            returnTimeout = setTimeout(() => {
+                targetOrbitTheta = 0;
+                targetOrbitPhi = Math.PI / 3;
+                targetOrbitRadius = 10;
+                applyOrbitToTarget();
+            }, RETURN_DELAY);
+        }
+
+        renderer.domElement.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            isDragging = true;
+            dragMoved = false;
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+            thetaVelocity = 0;
+            phiVelocity = 0;
+            if (returnTimeout) clearTimeout(returnTimeout);
+            targetOrbitTheta = orbitTheta;
+            targetOrbitPhi = orbitPhi;
+        });
+
+        window.addEventListener('pointermove', (e) => {
             if (!isDragging) return;
+            const dx = e.clientX - lastMouseX;
+            const dy = e.clientY - lastMouseY;
+            if (Math.abs(dx) > 1 || Math.abs(dy) > 1) dragMoved = true;
+
+            targetOrbitTheta -= dx * 0.003; // интуитивное направление
+            targetOrbitPhi   += dy * 0.003; // мышь вверх = поднять камеру
+            targetOrbitPhi = Math.max(0.25, Math.min(Math.PI - 0.25, targetOrbitPhi));
+
+            orbitTheta = targetOrbitTheta;
+            orbitPhi = targetOrbitPhi;
+            applyOrbitToTarget();
+
+            // Немедленно применяем позицию камеры во время перетаскивания
+            currentCamPos.copy(targetCamPos);
+            currentLookAt.copy(targetLookAt);
+            camera.position.copy(targetCamPos);
+            camera.lookAt(targetLookAt);
+
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+        });
+
+        window.addEventListener('pointerup', (e) => {
+            if (!isDragging) return;
+            isDragging = false;
+
             if (!dragMoved) {
                 const rect = renderer.domElement.getBoundingClientRect();
                 mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
                 mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
                 raycaster.setFromCamera(mouse, camera);
-                const candidates = interactableObjects.map(o => o.obj);
-                const intersects = raycaster.intersectObjects(candidates, true);
+                const intersects = raycaster.intersectObjects(planetGroup.children, true);
                 if (intersects.length > 0) {
                     let obj = intersects[0].object;
                     while (obj && !obj.userData.planet) obj = obj.parent;
                     if (obj && obj.userData.planet) {
                         navigate(obj.userData.planet);
+                        return;
                     }
                 }
             } else {
-                animateFly(currentCamPos.clone(), preDragTargetPos, targetLookAt.clone(), preDragTargetLookAt, 1000);
+                scheduleReturn();
             }
-            isDragging = false;
-        }
+        });
 
-        function onWheel(e) {
+        renderer.domElement.addEventListener('wheel', (e) => {
             e.preventDefault();
-            const delta = Math.sign(e.deltaY) * 0.5;
-            zoomOffset = Math.max(-6, Math.min(3, zoomOffset + delta));
-        }
-
-        renderer.domElement.addEventListener('pointerdown', onPointerDown);
-        window.addEventListener('pointermove', onPointerMove);
-        window.addEventListener('pointerup', onPointerUp);
-        renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
+            const delta = Math.sign(e.deltaY) * 0.8;
+            targetOrbitRadius = Math.max(5, Math.min(18, targetOrbitRadius + delta));
+            orbitRadius = targetOrbitRadius;
+            applyOrbitToTarget();
+            scheduleReturn();
+        }, { passive: false });
 
         let mX = 0, mY = 0;
         document.addEventListener('mousemove', function (e) {
@@ -1396,11 +1410,28 @@
                 ast.rotation.y += 0.003;
             });
 
+            // --- Инерция и плавное приближение ---
+            if (!isDragging && !flyAnimation) {
+                if (Math.abs(thetaVelocity) > 0.0001 || Math.abs(phiVelocity) > 0.0001) {
+                    targetOrbitTheta += thetaVelocity;
+                    targetOrbitPhi   += phiVelocity;
+                    targetOrbitPhi = Math.max(0.25, Math.min(Math.PI - 0.25, targetOrbitPhi));
+                    thetaVelocity *= damping;
+                    phiVelocity *= damping;
+                    applyOrbitToTarget();
+                } else {
+                    orbitTheta += (targetOrbitTheta - orbitTheta) * 0.08;
+                    orbitPhi   += (targetOrbitPhi   - orbitPhi)   * 0.08;
+                    orbitRadius += (targetOrbitRadius - orbitRadius) * 0.08;
+                    applyOrbitToTarget();
+                }
+            }
+
             const desiredCamPos = targetCamPos.clone();
             desiredCamPos.z += zoomOffset;
             if (!isDragging && !flyAnimation) {
-                currentCamPos.lerp(desiredCamPos, 0.06);
-                currentLookAt.lerp(targetLookAt, 0.06);
+                currentCamPos.lerp(desiredCamPos, 0.12);
+                currentLookAt.lerp(targetLookAt, 0.12);
                 camera.position.copy(currentCamPos);
                 camera.lookAt(currentLookAt);
             }
@@ -1435,7 +1466,6 @@
                     });
                 }
             });
-            // пересоздаём туманности
             nebulas.forEach(s => scene.remove(s));
             nebulas = [];
             const r = Math.floor(col.r * 255);
@@ -1469,6 +1499,11 @@
                 currentTheme = themes[id];
                 applyTheme(currentTheme);
             }
+            // Синхронизируем орбиту с новым ракурсом — никакого доворота
+            syncOrbitToTarget();
+            // Отменяем таймер возврата, чтобы камера не уплывала
+            if (returnTimeout) clearTimeout(returnTimeout);
+            // Плавный перелёт
             animateFly(currentCamPos.clone(), newCamPos, currentLookAt.clone(), newPlanet.position.clone(), 1200);
             animateZoom(zoomOffset, -3.0, 350, function () {
                 setTimeout(function () { animateZoom(zoomOffset, 0, 650); }, 200);
@@ -1480,6 +1515,16 @@
             e.preventDefault();
             navigate(l.dataset.target);
         }));
+
+        function syncOrbitToTarget() {
+            const offset = targetCamPos.clone().sub(targetLookAt);
+            const sp = new THREE.Spherical().setFromVector3(offset);
+            targetOrbitTheta = orbitTheta = sp.theta;
+            targetOrbitPhi   = orbitPhi   = sp.phi;
+            targetOrbitRadius = orbitRadius = sp.radius;
+            thetaVelocity = 0;
+            phiVelocity = 0;
+        }
 
         /* ===== ТЕРМИНАЛ ===== */
         const term = document.getElementById('terminal'),
@@ -1598,7 +1643,17 @@
             if (draggingTerm) { draggingTerm = false; term.style.transition = ''; }
         });
 
-        navigate('about');
+        (function initAbout() {
+            activePlanet = planetAbout;
+            targetCamPos.set(-2, 1.8, 10);
+            targetLookAt.copy(planetAbout.position);
+            currentCamPos.copy(targetCamPos);
+            currentLookAt.copy(targetLookAt);
+            camera.position.copy(currentCamPos);
+            camera.lookAt(currentLookAt);
+            document.getElementById('hud-section').textContent = 'ABOUT';
+            resetOrbitToDefault(); // установит орбитальные параметры
+        })();
     })();
 </script>
 </body>
